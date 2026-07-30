@@ -4,7 +4,12 @@ import scipy.sparse.linalg as spla
 
 from solver.fvm import BuoyancyParams, assemble_operator, backward_euler_step, simulate_representative_day
 from solver.geometry import HeatSource, Room, build_room_mesh
-from solver.materials import CLIMATE_PRESETS, DEFAULT_THERMOSTAT, DEFAULT_U_VALUES_W_PER_M2K
+from solver.materials import (
+    CLIMATE_PRESETS,
+    DEFAULT_THERMOSTAT,
+    DEFAULT_U_VALUES_W_PER_M2K,
+    suggested_heater_power_w,
+)
 
 
 def _default_room_and_source() -> tuple[Room, HeatSource]:
@@ -87,7 +92,7 @@ def test_buoyancy_convection_reduces_spatial_temperature_spread():
     assert np.std(temperature_with_convection) < np.std(temperature_no_convection)
 
 
-def test_bang_bang_thermostat_cycles_heater_over_a_representative_day():
+def test_pi_thermostat_cycles_heater_over_a_representative_day():
     room, heat_source = _default_room_and_source()
     climate = CLIMATE_PRESETS["temperate_winter"]
 
@@ -100,3 +105,24 @@ def test_bang_bang_thermostat_cycles_heater_over_a_representative_day():
     assert result.heater_power_w.max() == pytest.approx(heat_source.max_power_w)
     assert result.heater_power_w.min() == 0.0
     assert 0 < np.count_nonzero(result.heater_power_w) < len(result.heater_power_w)
+
+
+def test_pi_thermostat_tracks_target_tightly_with_a_right_sized_heater():
+    # This is the regression test for the overshoot problem a flat, oversized
+    # heater default caused with bang-bang control: with a heater sized from the
+    # room's own physics and a PI controller, the room should settle close to
+    # the day target rather than swinging several degrees past it.
+    room = Room(width_m=4.0, height_m=3.0)
+    climate = CLIMATE_PRESETS["temperate_winter"]
+    heat_source = HeatSource(x_m=2.0, y_m=1.5, max_power_w=suggested_heater_power_w(room, climate, DEFAULT_THERMOSTAT))
+
+    result = simulate_representative_day(
+        room, heat_source, climate, DEFAULT_THERMOSTAT,
+        nx=8, ny=6, dt_s=300.0, initial_temp_c=10.0,
+    )
+
+    # Ignore the first half of the day: starting 10.5C below target, the
+    # controller saturates to full power to catch up, which is correct
+    # behavior, not overshoot.
+    settled = result.room_avg_temp_c[len(result.room_avg_temp_c) // 2 :]
+    assert settled.max() < DEFAULT_THERMOSTAT.day_target_c + 1.0

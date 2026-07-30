@@ -40,7 +40,6 @@ export interface ThermostatSettings {
   nightTargetC: number;
   dayStartHour: number;
   nightStartHour: number;
-  hysteresisC: number;
 }
 
 export interface SimulationRequest {

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 import scipy.linalg
 
-from solver.controller import ThermostatState, bang_bang_power_w
+from solver.controller import ControllerState, PIControllerParams, pi_power_w
 from solver.fvm import (
     AIR_RHO_C_J_PER_M3K,
     BuoyancyParams,
@@ -133,8 +133,9 @@ def simulate_reduced_days(
     initial_temp_c: float,
     dt_s: float,
     n_days: int,
+    controller_params: PIControllerParams = PIControllerParams(),
 ) -> list[ReducedDayResult]:
-    """Time-step the reduced (linear) model for `n_days`, using the same bang-bang
+    """Time-step the reduced (linear) model for `n_days`, using the same PI
     controller as the full solver. Cheap enough to run for a whole month directly,
     but the caller typically only needs enough days to reach the repeating
     (periodic-steady-state) daily pattern -- see `estimate_monthly_energy_kwh`."""
@@ -142,7 +143,7 @@ def simulate_reduced_days(
     z = reduced_model.w_r @ np.full(n_cells, initial_temp_c)
 
     steps_per_day = int(round(24 * 3600 / dt_s))
-    thermostat_state = ThermostatState()
+    controller_state = ControllerState()
     results: list[ReducedDayResult] = []
 
     for _day in range(n_days):
@@ -153,8 +154,14 @@ def simulate_reduced_days(
         for step in range(steps_per_day):
             hour = (step * dt_s) / 3600.0
             room_avg_now_c = float((reduced_model.avg_row @ z).real)
-            power_w = bang_bang_power_w(
-                room_avg_now_c, hour, thermostat, heat_source.max_power_w, thermostat_state
+            power_w = pi_power_w(
+                room_avg_now_c,
+                hour,
+                thermostat,
+                heat_source.max_power_w,
+                dt_s,
+                controller_state,
+                controller_params,
             )
             outdoor_temp_c = climate.outdoor_temp_c(hour)
 

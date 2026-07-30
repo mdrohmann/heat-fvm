@@ -38,7 +38,6 @@ export const DEFAULT_THERMOSTAT: ThermostatSettings = {
   nightTargetC: 17.0,
   dayStartHour: 6,
   nightStartHour: 22,
-  hysteresisC: 0.5,
 };
 
 export const DEFAULT_ROOM: Room = {
@@ -52,10 +51,15 @@ export const DEFAULT_ROOM: Room = {
   },
 };
 
+// Computed via solver.materials.suggested_heater_power_w(DEFAULT_ROOM, CLIMATE_PRESETS[0],
+// DEFAULT_THERMOSTAT) -- sized from the room's own UA and worst-case delta-T rather than a
+// flat guess. A flat 1500W default massively overshot the day target with bang-bang control
+// (see solver/tests/test_materials.py::test_suggested_heater_power_for_default_demo_room_is_realistic
+// for the regression pin on this number staying in a sane range).
 export const DEFAULT_HEAT_SOURCE: HeatSource = {
   xM: 0.4,
   yM: 1.5,
-  maxPowerW: 1500,
+  maxPowerW: 473,
 };
 
 export function defaultSimulationRequest(): SimulationRequest {

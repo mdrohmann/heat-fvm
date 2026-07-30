@@ -25,7 +25,7 @@ from solver.materials import (
     DEFAULT_U_VALUES_W_PER_M2K,
     ThermostatSettings,
 )
-from solver.controller import ThermostatState, bang_bang_power_w
+from solver.controller import ControllerState, PIControllerParams, pi_power_w
 
 AIR_RHO_C_J_PER_M3K = AIR_DENSITY_KG_PER_M3 * AIR_SPECIFIC_HEAT_J_PER_KGK
 
@@ -198,16 +198,18 @@ def simulate_representative_day(
     dt_s: float = 300.0,
     initial_temp_c: float = 18.0,
     buoyancy_params: BuoyancyParams = BuoyancyParams(),
+    controller_params: PIControllerParams = PIControllerParams(),
 ) -> DayResult:
     """Run the full nonlinear buoyancy-coupled FVM for one simulated day, with a
-    bang-bang thermostat driving the heat source. This is the "short representative
-    window" the project plan reserves for the rich, physically-complete solve — the
-    monthly energy estimate instead uses a linearized reduced model (see mor.py)."""
+    proportional-integral thermostat driving the heat source. This is the "short
+    representative window" the project plan reserves for the rich, physically-
+    complete solve — the monthly energy estimate instead uses a linearized
+    reduced model (see mor.py)."""
     room_mesh = build_room_mesh(room, heat_source, nx, ny)
     n_steps = int(round(24 * 3600 / dt_s))
 
     temperature_c = np.full(room_mesh.mesh.n_cells, initial_temp_c, dtype=float)
-    thermostat_state = ThermostatState()
+    controller_state = ControllerState()
 
     hours = np.zeros(n_steps)
     room_avg_temp_c = np.zeros(n_steps)
@@ -217,8 +219,14 @@ def simulate_representative_day(
     for step in range(n_steps):
         hour = (step * dt_s) / 3600.0
         outdoor_temp_c = climate.outdoor_temp_c(hour)
-        power_w = bang_bang_power_w(
-            float(np.mean(temperature_c)), hour, thermostat, heat_source.max_power_w, thermostat_state
+        power_w = pi_power_w(
+            float(np.mean(temperature_c)),
+            hour,
+            thermostat,
+            heat_source.max_power_w,
+            dt_s,
+            controller_state,
+            controller_params,
         )
 
         temperature_c = backward_euler_step(

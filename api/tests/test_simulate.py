@@ -28,7 +28,6 @@ def _sample_payload() -> dict:
             "nightTargetC": 17.0,
             "dayStartHour": 6.0,
             "nightStartHour": 22.0,
-            "hysteresisC": 0.5,
         },
     }
 

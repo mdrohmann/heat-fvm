@@ -69,7 +69,6 @@ def _parse_thermostat(payload: dict[str, Any]) -> ThermostatSettings:
         night_target_c=float(payload["nightTargetC"]),
         day_start_hour=float(payload["dayStartHour"]),
         night_start_hour=float(payload["nightStartHour"]),
-        hysteresis_c=float(payload.get("hysteresisC", 0.5)),
     )
 
 
