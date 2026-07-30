@@ -38,11 +38,18 @@ export default function Home() {
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 font-sans dark:bg-black">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-        <header>
+        <header className="flex flex-col gap-3">
           <h1 className="text-2xl font-semibold">heat-fvm</h1>
+          <p className="text-lg font-medium text-zinc-800 dark:text-zinc-200">
+            Simulate how heater positions, insulation, and climate affect heating costs.
+          </p>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            2D room heat-flow simulation: place windows, doors, and a heat source, then see how the heater
-            keeps the room at its target temperature — and what that costs per month.
+            A 2D finite-volume heat-flow simulator: place windows, doors, and a heat source, then see how
+            the heater keeps the room at its target temperature — and what that costs per month.
+          </p>
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            This is a simplified theoretical model built for demonstration purposes. It has not been
+            validated against real-world measurements — treat the numbers as illustrative, not predictive.
           </p>
         </header>
 
@@ -175,6 +182,24 @@ export default function Home() {
             )}
           </section>
         </div>
+
+        <footer className="mt-4 border-t pt-6 text-sm text-zinc-600 dark:text-zinc-400">
+          <h2 className="text-base font-medium text-zinc-800 dark:text-zinc-200">Roadmap</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>3D simulations</li>
+            <li>Heat pump vs. static heating elements</li>
+            <li>More complex (multi-room) geometries</li>
+            <li>More flexibility in climate input</li>
+          </ul>
+          <a
+            href="https://github.com/mdrohmann/heat-fvm"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block underline"
+          >
+            View source on GitHub →
+          </a>
+        </footer>
       </main>
     </div>
   );
