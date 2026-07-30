@@ -25,6 +25,7 @@ from solver.controller import ThermostatState, bang_bang_power_w
 from solver.fvm import (
     AIR_RHO_C_J_PER_M3K,
     BuoyancyParams,
+    DayResult,
     assemble_operator,
     buoyancy_velocity,
     simulate_representative_day,
@@ -190,6 +191,33 @@ def estimate_monthly_energy_kwh(
     and reducing via modal truncation, instead of running the full nonlinear FVM
     for a whole month."""
     representative = simulate_representative_day(room, heat_source, climate, thermostat, nx=nx, ny=ny)
+    return estimate_monthly_energy_from_day(
+        representative,
+        room,
+        heat_source,
+        climate,
+        thermostat,
+        n_modes=n_modes,
+        settle_days=settle_days,
+        days_in_month=days_in_month,
+        dt_s=dt_s,
+    )
+
+
+def estimate_monthly_energy_from_day(
+    representative: DayResult,
+    room: Room,
+    heat_source: HeatSource,
+    climate: ClimatePreset,
+    thermostat: ThermostatSettings,
+    n_modes: int = 10,
+    settle_days: int = 4,
+    days_in_month: int = 30,
+    dt_s: float = 900.0,
+) -> float:
+    """Same as `estimate_monthly_energy_kwh`, but reuses an already-computed
+    representative-day solve (e.g. one also used to drive the visualization),
+    instead of paying for a second full nonlinear FVM day."""
     mean_field_c = representative.temperature_fields_c.mean(axis=0)
     u_frozen, v_frozen = buoyancy_velocity(
         representative.room_mesh, room.width_m, room.height_m, mean_field_c, BuoyancyParams()

@@ -48,6 +48,13 @@ reference implementation, not a rushed demo.
   of this repo is transparent, physically-grounded model reduction.
 - Don't add configuration options, abstractions, or generality beyond what 3D
   extensibility and the stated feature set actually require.
+- There is no `vercel.json` on purpose: as of Vercel CLI 58.4.0, `vercel dev`'s Python
+  builder throws (`builder.build()` must not contain \`maxDuration\`/\`memory\`) if
+  `functions` config is set for `api/simulate.py`, even though the platform accepts
+  those fields for real deployments. Platform defaults (300s timeout, 2GB memory) are
+  already generous for this solver's grid sizes. If you need to reintroduce
+  per-function config, verify it against the then-current CLI/builder version first —
+  don't assume the local `vercel dev` failure mode has been fixed.
 
 ## Suggested skills & agents for building this
 - `dataviz` — for styling the temperature-vs-time, heater power, and monthly energy

@@ -21,4 +21,5 @@ build-backend = "setuptools.build_meta"
 include = ["solver*"]
 
 [tool.pytest.ini_options]
-testpaths = ["solver/tests"]
+testpaths = ["solver/tests", "api/tests"]
+pythonpath = ["."]

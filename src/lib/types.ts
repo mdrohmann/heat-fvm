@@ -3,6 +3,7 @@
 // single source of truth for the JSON shape crossing that boundary.
 
 export type WallElementType = "wall" | "window" | "door";
+export type WallSide = "north" | "east" | "south" | "west";
 
 export interface WallElement {
   type: WallElementType;
@@ -16,12 +17,7 @@ export interface Room {
   widthM: number;
   heightM: number;
   /** Elements placed on each of the room's four walls (north/east/south/west). */
-  walls: {
-    north: WallElement[];
-    east: WallElement[];
-    south: WallElement[];
-    west: WallElement[];
-  };
+  walls: Record<WallSide, WallElement[]>;
 }
 
 export interface HeatSource {
