@@ -2,6 +2,8 @@
 
 **Simulate how heater positions, insulation, and climate affect heating costs.**
 
+🔗 **Live demo:** [heat-fvm.vercel.app](https://heat-fvm.vercel.app)
+
 A 2D finite-volume heat-flow simulator for a single room: place windows, doors, and a
 heat source, pick a climate and target temperature, and watch a proportional-integral
 thermostat keep the room at temperature — with a monthly energy estimate computed via
