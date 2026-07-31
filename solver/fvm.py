@@ -16,12 +16,12 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from solver.climate import HOURS_PER_DAY, ClimateLocation
 from solver.geometry import HeatSource, Mesh, Room, RoomMesh, WallElementType, build_room_mesh
 from solver.materials import (
     AIR_DENSITY_KG_PER_M3,
     AIR_SPECIFIC_HEAT_J_PER_KGK,
     AIR_THERMAL_CONDUCTIVITY_W_PER_MK,
-    ClimatePreset,
     DEFAULT_U_VALUES_W_PER_M2K,
     ThermostatSettings,
 )
@@ -191,8 +191,9 @@ class DayResult:
 def simulate_representative_day(
     room: Room,
     heat_source: HeatSource,
-    climate: ClimatePreset,
+    climate: ClimateLocation,
     thermostat: ThermostatSettings,
+    day_of_year: int = 0,
     nx: int = 20,
     ny: int = 15,
     dt_s: float = 300.0,
@@ -200,13 +201,14 @@ def simulate_representative_day(
     buoyancy_params: BuoyancyParams = BuoyancyParams(),
     controller_params: PIControllerParams = PIControllerParams(),
 ) -> DayResult:
-    """Run the full nonlinear buoyancy-coupled FVM for one simulated day, with a
-    proportional-integral thermostat driving the heat source. This is the "short
-    representative window" the project plan reserves for the rich, physically-
-    complete solve — the monthly energy estimate instead uses a linearized
+    """Run the full nonlinear buoyancy-coupled FVM for one simulated day of the year,
+    with a proportional-integral thermostat driving the heat source. This is the
+    "short representative window" the project plan reserves for the rich,
+    physically-complete solve — the annual energy estimate instead uses a linearized
     reduced model (see mor.py)."""
     room_mesh = build_room_mesh(room, heat_source, nx, ny)
     n_steps = int(round(24 * 3600 / dt_s))
+    day_start_hours = day_of_year * HOURS_PER_DAY
 
     temperature_c = np.full(room_mesh.mesh.n_cells, initial_temp_c, dtype=float)
     controller_state = ControllerState()
@@ -218,7 +220,7 @@ def simulate_representative_day(
 
     for step in range(n_steps):
         hour = (step * dt_s) / 3600.0
-        outdoor_temp_c = climate.outdoor_temp_c(hour)
+        outdoor_temp_c = climate.outdoor_temp_c(day_start_hours + hour)
         power_w = pi_power_w(
             float(np.mean(temperature_c)),
             hour,

@@ -1,0 +1,406 @@
+{
+ "_meta": {
+  "description": "Reduced-order model accuracy against the full nonlinear FVM solver, measured on the reference room (4.0 x 3.0 m, one window, one door) for each climate. Each sample runs both models over the same day from the same initial condition and compares heater energy.",
+  "reference_room": {
+   "width_m": 4.0,
+   "height_m": 3.0
+  },
+  "sample_days": [
+   14,
+   45,
+   73,
+   104,
+   134,
+   165,
+   195,
+   226,
+   257,
+   287,
+   318,
+   348
+  ],
+  "generated_by": "scripts/run_rom_validation.py"
+ },
+ "locations": {
+  "berlin": {
+   "label": "Berlin, Germany",
+   "linearization_day_of_year": 81,
+   "linearization_mean_temp_c": 4.93,
+   "total_energy_relative_error": 0.05415140902000772,
+   "max_abs_relative_error": 0.24009687801505966,
+   "mean_abs_relative_error": 0.09987904120453903,
+   "max_abs_error_kwh": 0.5908546587814474,
+   "points": [
+    {
+     "dayOfYear": 14,
+     "meanOutdoorTempC": -0.5,
+     "fullEnergyKWh": 6.6125,
+     "reducedEnergyKWh": 6.4194,
+     "relativeError": -0.0292
+    },
+    {
+     "dayOfYear": 45,
+     "meanOutdoorTempC": 0.27,
+     "fullEnergyKWh": 6.425,
+     "reducedEnergyKWh": 6.3519,
+     "relativeError": -0.0114
+    },
+    {
+     "dayOfYear": 73,
+     "meanOutdoorTempC": 3.74,
+     "fullEnergyKWh": 5.8654,
+     "reducedEnergyKWh": 6.011,
+     "relativeError": 0.0248
+    },
+    {
+     "dayOfYear": 104,
+     "meanOutdoorTempC": 8.34,
+     "fullEnergyKWh": 4.3225,
+     "reducedEnergyKWh": 4.6239,
+     "relativeError": 0.0697
+    },
+    {
+     "dayOfYear": 134,
+     "meanOutdoorTempC": 13.66,
+     "fullEnergyKWh": 2.4609,
+     "reducedEnergyKWh": 3.0518,
+     "relativeError": 0.2401
+    },
+    {
+     "dayOfYear": 165,
+     "meanOutdoorTempC": 17.02,
+     "fullEnergyKWh": 1.1373,
+     "reducedEnergyKWh": 1.402,
+     "relativeError": 0.2327
+    },
+    {
+     "dayOfYear": 195,
+     "meanOutdoorTempC": 18.79,
+     "fullEnergyKWh": 0.5267,
+     "reducedEnergyKWh": 0.749,
+     "relativeError": 0.4222
+    },
+    {
+     "dayOfYear": 226,
+     "meanOutdoorTempC": 18.75,
+     "fullEnergyKWh": 0.5154,
+     "reducedEnergyKWh": 0.7385,
+     "relativeError": 0.433
+    },
+    {
+     "dayOfYear": 257,
+     "meanOutdoorTempC": 14.88,
+     "fullEnergyKWh": 1.9363,
+     "reducedEnergyKWh": 2.3363,
+     "relativeError": 0.2066
+    },
+    {
+     "dayOfYear": 287,
+     "meanOutdoorTempC": 10.06,
+     "fullEnergyKWh": 3.713,
+     "reducedEnergyKWh": 4.1455,
+     "relativeError": 0.1165
+    },
+    {
+     "dayOfYear": 318,
+     "meanOutdoorTempC": 4.55,
+     "fullEnergyKWh": 5.7112,
+     "reducedEnergyKWh": 5.9915,
+     "relativeError": 0.0491
+    },
+    {
+     "dayOfYear": 348,
+     "meanOutdoorTempC": 1.25,
+     "fullEnergyKWh": 6.4638,
+     "reducedEnergyKWh": 6.3433,
+     "relativeError": -0.0186
+    }
+   ]
+  },
+  "chicago": {
+   "label": "Chicago, USA",
+   "linearization_day_of_year": 77,
+   "linearization_mean_temp_c": 1.02,
+   "total_energy_relative_error": 0.05600724759817965,
+   "max_abs_relative_error": 0.29024553490827276,
+   "mean_abs_relative_error": 0.09760033786657583,
+   "max_abs_error_kwh": 0.8062871002707555,
+   "points": [
+    {
+     "dayOfYear": 14,
+     "meanOutdoorTempC": -5.25,
+     "fullEnergyKWh": 8.3218,
+     "reducedEnergyKWh": 8.1013,
+     "relativeError": -0.0265
+    },
+    {
+     "dayOfYear": 45,
+     "meanOutdoorTempC": -4.3,
+     "fullEnergyKWh": 8.0786,
+     "reducedEnergyKWh": 8.0445,
+     "relativeError": -0.0042
+    },
+    {
+     "dayOfYear": 73,
+     "meanOutdoorTempC": 0.38,
+     "fullEnergyKWh": 7.3984,
+     "reducedEnergyKWh": 7.634,
+     "relativeError": 0.0318
+    },
+    {
+     "dayOfYear": 104,
+     "meanOutdoorTempC": 6.94,
+     "fullEnergyKWh": 5.0326,
+     "reducedEnergyKWh": 5.4773,
+     "relativeError": 0.0884
+    },
+    {
+     "dayOfYear": 134,
+     "meanOutdoorTempC": 13.47,
+     "fullEnergyKWh": 2.7284,
+     "reducedEnergyKWh": 3.5203,
+     "relativeError": 0.2902
+    },
+    {
+     "dayOfYear": 165,
+     "meanOutdoorTempC": 20.41,
+     "fullEnergyKWh": 0.1672,
+     "reducedEnergyKWh": 0.2323,
+     "relativeError": 0.3894
+    },
+    {
+     "dayOfYear": 195,
+     "meanOutdoorTempC": 23.32,
+     "fullEnergyKWh": 0.0611,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": -1.0
+    },
+    {
+     "dayOfYear": 226,
+     "meanOutdoorTempC": 22.45,
+     "fullEnergyKWh": 0.1286,
+     "reducedEnergyKWh": 0.054,
+     "relativeError": -0.5799
+    },
+    {
+     "dayOfYear": 257,
+     "meanOutdoorTempC": 18.8,
+     "fullEnergyKWh": 0.4004,
+     "reducedEnergyKWh": 0.6266,
+     "relativeError": 0.5648
+    },
+    {
+     "dayOfYear": 287,
+     "meanOutdoorTempC": 12.18,
+     "fullEnergyKWh": 3.2741,
+     "reducedEnergyKWh": 4.0804,
+     "relativeError": 0.2463
+    },
+    {
+     "dayOfYear": 318,
+     "meanOutdoorTempC": 4.87,
+     "fullEnergyKWh": 5.5709,
+     "reducedEnergyKWh": 5.9786,
+     "relativeError": 0.0732
+    },
+    {
+     "dayOfYear": 348,
+     "meanOutdoorTempC": -1.94,
+     "fullEnergyKWh": 7.866,
+     "reducedEnergyKWh": 8.0247,
+     "relativeError": 0.0202
+    }
+   ]
+  },
+  "phoenix": {
+   "label": "Phoenix, USA",
+   "linearization_day_of_year": 38,
+   "linearization_mean_temp_c": 12.44,
+   "total_energy_relative_error": 0.012397573231974518,
+   "max_abs_relative_error": 0.16717697718560626,
+   "mean_abs_relative_error": 0.053553461993896816,
+   "max_abs_error_kwh": 0.10108884836216747,
+   "points": [
+    {
+     "dayOfYear": 14,
+     "meanOutdoorTempC": 10.78,
+     "fullEnergyKWh": 3.2538,
+     "reducedEnergyKWh": 3.3165,
+     "relativeError": 0.0193
+    },
+    {
+     "dayOfYear": 45,
+     "meanOutdoorTempC": 13.19,
+     "fullEnergyKWh": 2.4581,
+     "reducedEnergyKWh": 2.4958,
+     "relativeError": 0.0153
+    },
+    {
+     "dayOfYear": 73,
+     "meanOutdoorTempC": 16.69,
+     "fullEnergyKWh": 1.4004,
+     "reducedEnergyKWh": 1.5015,
+     "relativeError": 0.0722
+    },
+    {
+     "dayOfYear": 104,
+     "meanOutdoorTempC": 21.86,
+     "fullEnergyKWh": 0.3705,
+     "reducedEnergyKWh": 0.4324,
+     "relativeError": 0.1672
+    },
+    {
+     "dayOfYear": 134,
+     "meanOutdoorTempC": 27.0,
+     "fullEnergyKWh": 0.0507,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": -1.0
+    },
+    {
+     "dayOfYear": 165,
+     "meanOutdoorTempC": 32.5,
+     "fullEnergyKWh": 0.0,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": 0.0
+    },
+    {
+     "dayOfYear": 195,
+     "meanOutdoorTempC": 35.03,
+     "fullEnergyKWh": 0.0,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": 0.0
+    },
+    {
+     "dayOfYear": 226,
+     "meanOutdoorTempC": 33.48,
+     "fullEnergyKWh": 0.0,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": 0.0
+    },
+    {
+     "dayOfYear": 257,
+     "meanOutdoorTempC": 30.19,
+     "fullEnergyKWh": 0.0,
+     "reducedEnergyKWh": 0.0,
+     "relativeError": 0.0
+    },
+    {
+     "dayOfYear": 287,
+     "meanOutdoorTempC": 23.65,
+     "fullEnergyKWh": 0.11,
+     "reducedEnergyKWh": 0.119,
+     "relativeError": 0.082
+    },
+    {
+     "dayOfYear": 318,
+     "meanOutdoorTempC": 15.93,
+     "fullEnergyKWh": 1.5991,
+     "reducedEnergyKWh": 1.6275,
+     "relativeError": 0.0178
+    },
+    {
+     "dayOfYear": 348,
+     "meanOutdoorTempC": 10.98,
+     "fullEnergyKWh": 3.2264,
+     "reducedEnergyKWh": 3.1309,
+     "relativeError": -0.0296
+    }
+   ]
+  },
+  "reykjavik": {
+   "label": "Reykjavik, Iceland",
+   "linearization_day_of_year": 105,
+   "linearization_mean_temp_c": 2.74,
+   "total_energy_relative_error": 0.03455584335306012,
+   "max_abs_relative_error": 0.1237228564681319,
+   "mean_abs_relative_error": 0.052216675920835516,
+   "max_abs_error_kwh": 0.48290985169093714,
+   "points": [
+    {
+     "dayOfYear": 14,
+     "meanOutdoorTempC": -1.93,
+     "fullEnergyKWh": 7.0832,
+     "reducedEnergyKWh": 6.9143,
+     "relativeError": -0.0238
+    },
+    {
+     "dayOfYear": 45,
+     "meanOutdoorTempC": -0.84,
+     "fullEnergyKWh": 6.8735,
+     "reducedEnergyKWh": 6.8299,
+     "relativeError": -0.0063
+    },
+    {
+     "dayOfYear": 73,
+     "meanOutdoorTempC": 0.17,
+     "fullEnergyKWh": 6.8022,
+     "reducedEnergyKWh": 6.8465,
+     "relativeError": 0.0065
+    },
+    {
+     "dayOfYear": 104,
+     "meanOutdoorTempC": 2.68,
+     "fullEnergyKWh": 6.3801,
+     "reducedEnergyKWh": 6.6255,
+     "relativeError": 0.0385
+    },
+    {
+     "dayOfYear": 134,
+     "meanOutdoorTempC": 6.41,
+     "fullEnergyKWh": 4.8835,
+     "reducedEnergyKWh": 5.225,
+     "relativeError": 0.0699
+    },
+    {
+     "dayOfYear": 165,
+     "meanOutdoorTempC": 9.65,
+     "fullEnergyKWh": 3.9963,
+     "reducedEnergyKWh": 4.4792,
+     "relativeError": 0.1208
+    },
+    {
+     "dayOfYear": 195,
+     "meanOutdoorTempC": 11.3,
+     "fullEnergyKWh": 3.5795,
+     "reducedEnergyKWh": 3.9781,
+     "relativeError": 0.1114
+    },
+    {
+     "dayOfYear": 226,
+     "meanOutdoorTempC": 10.81,
+     "fullEnergyKWh": 3.5949,
+     "reducedEnergyKWh": 4.0397,
+     "relativeError": 0.1237
+    },
+    {
+     "dayOfYear": 257,
+     "meanOutdoorTempC": 7.81,
+     "fullEnergyKWh": 4.6077,
+     "reducedEnergyKWh": 4.7644,
+     "relativeError": 0.034
+    },
+    {
+     "dayOfYear": 287,
+     "meanOutdoorTempC": 4.25,
+     "fullEnergyKWh": 5.8477,
+     "reducedEnergyKWh": 6.2188,
+     "relativeError": 0.0635
+    },
+    {
+     "dayOfYear": 318,
+     "meanOutdoorTempC": 0.64,
+     "fullEnergyKWh": 6.6937,
+     "reducedEnergyKWh": 6.8144,
+     "relativeError": 0.018
+    },
+    {
+     "dayOfYear": 348,
+     "meanOutdoorTempC": -1.17,
+     "fullEnergyKWh": 6.9067,
+     "reducedEnergyKWh": 6.837,
+     "relativeError": -0.0101
+    }
+   ]
+  }
+ }
+}

@@ -4,8 +4,8 @@ import scipy.sparse.linalg as spla
 
 from solver.fvm import BuoyancyParams, assemble_operator, backward_euler_step, simulate_representative_day
 from solver.geometry import HeatSource, Room, build_room_mesh
+from solver.climate import get_climate
 from solver.materials import (
-    CLIMATE_PRESETS,
     DEFAULT_THERMOSTAT,
     DEFAULT_U_VALUES_W_PER_M2K,
     suggested_heater_power_w,
@@ -94,7 +94,7 @@ def test_buoyancy_convection_reduces_spatial_temperature_spread():
 
 def test_pi_thermostat_cycles_heater_over_a_representative_day():
     room, heat_source = _default_room_and_source()
-    climate = CLIMATE_PRESETS["temperate_winter"]
+    climate = get_climate("berlin")
 
     result = simulate_representative_day(
         room, heat_source, climate, DEFAULT_THERMOSTAT,
@@ -113,7 +113,7 @@ def test_pi_thermostat_tracks_target_tightly_with_a_right_sized_heater():
     # room's own physics and a PI controller, the room should settle close to
     # the day target rather than swinging several degrees past it.
     room = Room(width_m=4.0, height_m=3.0)
-    climate = CLIMATE_PRESETS["temperate_winter"]
+    climate = get_climate("berlin")
     heat_source = HeatSource(x_m=2.0, y_m=1.5, max_power_w=suggested_heater_power_w(room, climate, DEFAULT_THERMOSTAT))
 
     result = simulate_representative_day(

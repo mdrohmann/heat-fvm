@@ -28,10 +28,10 @@ from solver.fvm import (
     DayResult,
     assemble_operator,
     buoyancy_velocity,
-    simulate_representative_day,
 )
+from solver.climate import DAYS_PER_YEAR, ClimateLocation, month_of_day
 from solver.geometry import HeatSource, Room, RoomMesh
-from solver.materials import ClimatePreset, ThermostatSettings
+from solver.materials import ThermostatSettings
 
 _CONJUGATE_PAIR_ATOL = 1e-6
 
@@ -120,25 +120,39 @@ def _step_modal_state(z: np.ndarray, lambdas: np.ndarray, rhs: np.ndarray, dt_s:
 
 @dataclass
 class ReducedDayResult:
+    day_of_year: int
     hours: np.ndarray
     room_avg_temp_c: np.ndarray
     heater_power_w: np.ndarray
+
+    def energy_kwh(self, dt_s: float) -> float:
+        return float(np.sum(self.heater_power_w) * dt_s / 3600.0 / 1000.0)
 
 
 def simulate_reduced_days(
     reduced_model: ReducedModel,
     heat_source: HeatSource,
-    climate: ClimatePreset,
+    climate: ClimateLocation,
     thermostat: ThermostatSettings,
     initial_temp_c: float,
     dt_s: float,
     n_days: int,
+    start_day_of_year: int = 0,
     controller_params: PIControllerParams = PIControllerParams(),
 ) -> list[ReducedDayResult]:
-    """Time-step the reduced (linear) model for `n_days`, using the same PI
-    controller as the full solver. Cheap enough to run for a whole month directly,
-    but the caller typically only needs enough days to reach the repeating
-    (periodic-steady-state) daily pattern -- see `estimate_monthly_energy_kwh`."""
+    """Time-step the reduced (linear) model across `n_days` consecutive days of the
+    year, using the same PI controller as the full solver.
+
+    Each day sees its own climatological outdoor temperature, and thermal state
+    carries across midnight, so a cold snap genuinely leaves the room colder going
+    into the next morning. Running this for a full year costs seconds, where the
+    full nonlinear solver would cost well over half an hour -- that gap is the whole
+    reason the reduction exists.
+
+    Note that only the *forcing* depends on outdoor temperature: the reduced
+    operator (and hence the modal basis) is invariant to it, so one linearization
+    serves every day of the year (see `build_reduced_model`).
+    """
     n_cells = reduced_model.room_mesh.mesh.n_cells
     z = reduced_model.w_r @ np.full(n_cells, initial_temp_c)
 
@@ -146,7 +160,10 @@ def simulate_reduced_days(
     controller_state = ControllerState()
     results: list[ReducedDayResult] = []
 
-    for _day in range(n_days):
+    for day_offset in range(n_days):
+        day_of_year = (start_day_of_year + day_offset) % DAYS_PER_YEAR
+        day_start_hours = day_of_year * 24.0
+
         hours = np.zeros(steps_per_day)
         room_avg_temp_c = np.zeros(steps_per_day)
         heater_power_w = np.zeros(steps_per_day)
@@ -163,7 +180,7 @@ def simulate_reduced_days(
                 controller_state,
                 controller_params,
             )
-            outdoor_temp_c = climate.outdoor_temp_c(hour)
+            outdoor_temp_c = climate.outdoor_temp_c(day_start_hours + hour)
 
             forcing = reduced_model.boundary_conductance_w_per_k * outdoor_temp_c
             forcing[reduced_model.heat_source_cell] += power_w
@@ -176,72 +193,100 @@ def simulate_reduced_days(
             heater_power_w[step] = power_w
 
         results.append(
-            ReducedDayResult(hours=hours, room_avg_temp_c=room_avg_temp_c, heater_power_w=heater_power_w)
+            ReducedDayResult(
+                day_of_year=day_of_year,
+                hours=hours,
+                room_avg_temp_c=room_avg_temp_c,
+                heater_power_w=heater_power_w,
+            )
         )
 
     return results
 
 
-def estimate_monthly_energy_kwh(
-    room: Room,
-    heat_source: HeatSource,
-    climate: ClimatePreset,
-    thermostat: ThermostatSettings,
-    nx: int = 20,
-    ny: int = 15,
-    n_modes: int = 10,
-    settle_days: int = 4,
-    days_in_month: int = 30,
-    dt_s: float = 900.0,
-) -> float:
-    """Estimate monthly heater energy by linearizing about a representative day
-    and reducing via modal truncation, instead of running the full nonlinear FVM
-    for a whole month."""
-    representative = simulate_representative_day(room, heat_source, climate, thermostat, nx=nx, ny=ny)
-    return estimate_monthly_energy_from_day(
-        representative,
-        room,
-        heat_source,
-        climate,
-        thermostat,
-        n_modes=n_modes,
-        settle_days=settle_days,
-        days_in_month=days_in_month,
-        dt_s=dt_s,
-    )
-
-
-def estimate_monthly_energy_from_day(
+def build_reduced_model_from_day(
     representative: DayResult,
     room: Room,
-    heat_source: HeatSource,
-    climate: ClimatePreset,
-    thermostat: ThermostatSettings,
     n_modes: int = 10,
-    settle_days: int = 4,
-    days_in_month: int = 30,
-    dt_s: float = 900.0,
-) -> float:
-    """Same as `estimate_monthly_energy_kwh`, but reuses an already-computed
-    representative-day solve (e.g. one also used to drive the visualization),
-    instead of paying for a second full nonlinear FVM day."""
+) -> ReducedModel:
+    """Linearize about an already-computed full-FVM day: freeze the buoyancy velocity
+    field to the pattern implied by that day's time-averaged temperature, then reduce."""
     mean_field_c = representative.temperature_fields_c.mean(axis=0)
     u_frozen, v_frozen = buoyancy_velocity(
         representative.room_mesh, room.width_m, room.height_m, mean_field_c, BuoyancyParams()
     )
+    return build_reduced_model(representative.room_mesh, u_frozen, v_frozen, n_modes)
 
-    reduced_model = build_reduced_model(representative.room_mesh, u_frozen, v_frozen, n_modes)
 
-    day_results = simulate_reduced_days(
+@dataclass
+class AnnualEnergyResult:
+    total_kwh: float
+    monthly_kwh: list[float]  # 12 entries, January first
+    daily_kwh: list[float]  # 365 entries
+    daily_mean_indoor_c: list[float]
+    daily_mean_outdoor_c: list[float]
+
+
+def estimate_annual_energy(
+    representative: DayResult,
+    room: Room,
+    heat_source: HeatSource,
+    climate: ClimateLocation,
+    thermostat: ThermostatSettings,
+    n_modes: int = 10,
+    spin_up_days: int = 10,
+    dt_s: float = 900.0,
+) -> AnnualEnergyResult:
+    """Simulate a full year of genuinely different days on the reduced model and sum
+    the heater energy.
+
+    `spin_up_days` runs the tail end of December first, purely so the year starts from
+    a thermally settled state rather than an arbitrary uniform temperature; those days
+    are discarded. Because the reduced operator is invariant to outdoor temperature,
+    the single linearization built from `representative` is valid across the whole
+    year -- only its *accuracy* degrades for days far from that operating point, which
+    `solver/validation.py` quantifies.
+    """
+    reduced_model = build_reduced_model_from_day(representative, room, n_modes)
+    initial_temp_c = float(representative.temperature_fields_c.mean())
+
+    spin_up = simulate_reduced_days(
         reduced_model,
         heat_source,
         climate,
         thermostat,
-        initial_temp_c=float(mean_field_c.mean()),
+        initial_temp_c=initial_temp_c,
         dt_s=dt_s,
-        n_days=settle_days + 1,
+        n_days=spin_up_days,
+        start_day_of_year=DAYS_PER_YEAR - spin_up_days,
     )
-    periodic_day = day_results[-1]
-    daily_energy_kwh = float(np.sum(periodic_day.heater_power_w) * dt_s / 3600.0 / 1000.0)
+    warm_start_c = float(spin_up[-1].room_avg_temp_c[-1]) if spin_up else initial_temp_c
 
-    return daily_energy_kwh * days_in_month
+    year = simulate_reduced_days(
+        reduced_model,
+        heat_source,
+        climate,
+        thermostat,
+        initial_temp_c=warm_start_c,
+        dt_s=dt_s,
+        n_days=DAYS_PER_YEAR,
+        start_day_of_year=0,
+    )
+
+    daily_kwh = [day.energy_kwh(dt_s) for day in year]
+    monthly_kwh = [0.0] * 12
+    for day, energy_kwh in zip(year, daily_kwh):
+        monthly_kwh[month_of_day(day.day_of_year)] += energy_kwh
+
+    daily_mean_outdoor_c = [
+        float(np.mean([climate.outdoor_temp_c(day.day_of_year * 24.0 + h) for h in day.hours]))
+        for day in year
+    ]
+
+    return AnnualEnergyResult(
+        total_kwh=float(sum(daily_kwh)),
+        monthly_kwh=monthly_kwh,
+        daily_kwh=daily_kwh,
+        daily_mean_indoor_c=[float(np.mean(day.room_avg_temp_c)) for day in year],
+        daily_mean_outdoor_c=daily_mean_outdoor_c,
+    )

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
+from solver.climate import ClimateLocation
 from solver.geometry import Room, WallElement, WallElementType
 
 # Air properties at ~20C, sea level (standard reference values).
@@ -21,32 +21,6 @@ DEFAULT_U_VALUES_W_PER_M2K: dict[WallElementType, float] = {
     WallElementType.WALL: 0.25,
     WallElementType.WINDOW: 1.8,
     WallElementType.DOOR: 2.0,
-}
-
-
-@dataclass(frozen=True)
-class ClimatePreset:
-    id: str
-    label: str
-    mean_outdoor_temp_c: float
-    diurnal_amplitude_c: float
-    peak_hour: float = 15.0  # outdoor temp peaks mid-afternoon by default
-
-    def outdoor_temp_c(self, hour: float) -> float:
-        """T_out(t) = T_mean + (amplitude/2) * cos(2*pi*(t - t_peak)/24), so the
-        temperature is at its maximum exactly at `peak_hour`."""
-        phase = 2 * math.pi * (hour - self.peak_hour) / 24.0
-        return self.mean_outdoor_temp_c + (self.diurnal_amplitude_c / 2.0) * math.cos(phase)
-
-
-CLIMATE_PRESETS: dict[str, ClimatePreset] = {
-    preset.id: preset
-    for preset in (
-        ClimatePreset("temperate_winter", "Temperate winter (e.g. Berlin, Jan)", 2.0, 5.0),
-        ClimatePreset("continental_winter", "Continental winter (e.g. Chicago, Jan)", -6.0, 8.0),
-        ClimatePreset("mild_spring", "Mild spring (e.g. Berlin, Apr)", 10.0, 6.0),
-        ClimatePreset("hot_summer", "Hot summer (e.g. Phoenix, Jul)", 33.0, 10.0),
-    )
 }
 
 
@@ -81,25 +55,33 @@ def _side_ua_w_per_k(
     return opening_ua_w_per_k + plain_wall_ua_w_per_k
 
 
-def suggested_heater_power_w(
+def room_ua_w_per_k(
     room: Room,
-    climate: ClimatePreset,
-    thermostat: ThermostatSettings,
     u_values_w_per_m2k: dict[WallElementType, float] = DEFAULT_U_VALUES_W_PER_M2K,
     depth_m: float = 2.5,
-    safety_factor: float = 1.3,
 ) -> float:
-    """Size a heater from the room's own physics instead of a flat guess: the
-    room's total steady-state loss coefficient (UA, summed the same way the FVM
-    boundary faces are -- see geometry.build_room_mesh) times the worst-case
-    (coldest-hour) indoor/outdoor delta-T, times a safety margin for recovering
-    from the night setback before the next day-target deadline."""
-    ua_w_per_k = (
+    """The room's total steady-state heat-loss coefficient, summed the same way the
+    FVM boundary faces are -- see geometry.build_room_mesh."""
+    return (
         _side_ua_w_per_k(room.walls["north"], room.width_m, u_values_w_per_m2k, depth_m)
         + _side_ua_w_per_k(room.walls["south"], room.width_m, u_values_w_per_m2k, depth_m)
         + _side_ua_w_per_k(room.walls["east"], room.height_m, u_values_w_per_m2k, depth_m)
         + _side_ua_w_per_k(room.walls["west"], room.height_m, u_values_w_per_m2k, depth_m)
     )
-    coldest_outdoor_c = climate.mean_outdoor_temp_c - climate.diurnal_amplitude_c / 2.0
-    worst_case_delta_t_c = thermostat.day_target_c - coldest_outdoor_c
+
+
+def suggested_heater_power_w(
+    room: Room,
+    climate: ClimateLocation,
+    thermostat: ThermostatSettings,
+    u_values_w_per_m2k: dict[WallElementType, float] = DEFAULT_U_VALUES_W_PER_M2K,
+    depth_m: float = 2.5,
+    safety_factor: float = 1.3,
+) -> float:
+    """Size a heater from the room's own physics instead of a flat guess: the room's
+    UA times the design (coldest normal condition of the year) indoor/outdoor
+    delta-T, times a safety margin for recovering from the night setback before the
+    next day-target deadline."""
+    ua_w_per_k = room_ua_w_per_k(room, u_values_w_per_m2k, depth_m)
+    worst_case_delta_t_c = thermostat.day_target_c - climate.design_outdoor_temp_c
     return ua_w_per_k * worst_case_delta_t_c * safety_factor

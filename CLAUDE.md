@@ -48,6 +48,17 @@ reference implementation, not a rushed demo.
   of this repo is transparent, physically-grounded model reduction.
 - Don't add configuration options, abstractions, or generality beyond what 3D
   extensibility and the stated feature set actually require.
+- Reduced-vs-full agreement is far more sensitive to the **timestep** than to the mesh.
+  On a mild summer day, dt=1800s puts the two models 1.81 kWh apart, dt=900s 0.30 kWh,
+  dt=300s 0.24 kWh — at coarse dt neither the PI controller nor backward Euler is well
+  resolved, so the disagreement is temporal discretisation, not the reduction. Validate
+  the ROM at the timestep the annual estimate actually uses; a "fast" coarse setting
+  measures the wrong thing and will produce alarming-looking numbers.
+- Pick the ROM's linearisation point by **heating-degree-day-weighted** mean outdoor
+  temperature, not the plain annual mean. In a hot climate the annual mean sits above
+  the thermostat target, anchoring the model where no heating runs — measured at -54%
+  annual error for Phoenix, versus +1.2% with the weighted anchor. See
+  `ClimateLocation.linearization_day_of_year`.
 - There is no `vercel.json` on purpose: as of Vercel CLI 58.4.0, `vercel dev`'s Python
   builder throws (`builder.build()` must not contain \`maxDuration\`/\`memory\`) if
   `functions` config is set for `api/simulate.py`, even though the platform accepts

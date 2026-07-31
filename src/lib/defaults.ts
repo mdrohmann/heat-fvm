@@ -1,35 +1,19 @@
-import type { ClimatePreset, HeatSource, Room, SimulationRequest, ThermostatSettings } from "./types";
+import type { ClimateOption, HeatSource, Room, ThermostatSettings } from "./types";
 
-// Mirrors solver/materials.py CLIMATE_PRESETS -- keep in sync.
-export const CLIMATE_PRESETS: ClimatePreset[] = [
-  {
-    id: "temperate_winter",
-    label: "Temperate winter (e.g. Berlin, Jan)",
-    meanOutdoorTempC: 2.0,
-    diurnalAmplitudeC: 5.0,
-    peakHour: 15,
-  },
-  {
-    id: "continental_winter",
-    label: "Continental winter (e.g. Chicago, Jan)",
-    meanOutdoorTempC: -6.0,
-    diurnalAmplitudeC: 8.0,
-    peakHour: 15,
-  },
-  {
-    id: "mild_spring",
-    label: "Mild spring (e.g. Berlin, Apr)",
-    meanOutdoorTempC: 10.0,
-    diurnalAmplitudeC: 6.0,
-    peakHour: 15,
-  },
-  {
-    id: "hot_summer",
-    label: "Hot summer (e.g. Phoenix, Jul)",
-    meanOutdoorTempC: 33.0,
-    diurnalAmplitudeC: 10.0,
-    peakHour: 15,
-  },
+// Mirrors the locations baked into solver/data/climate_normals.json by
+// scripts/fetch_climate_normals.py -- keep in sync.
+export const CLIMATE_OPTIONS: ClimateOption[] = [
+  { id: "berlin", label: "Berlin, Germany" },
+  { id: "chicago", label: "Chicago, USA" },
+  { id: "phoenix", label: "Phoenix, USA" },
+  { id: "reykjavik", label: "Reykjavik, Iceland" },
+];
+
+export const DEFAULT_CLIMATE_ID = "berlin";
+
+export const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 // Mirrors solver/materials.py ThermostatSettings defaults.
@@ -51,22 +35,11 @@ export const DEFAULT_ROOM: Room = {
   },
 };
 
-// Computed via solver.materials.suggested_heater_power_w(DEFAULT_ROOM, CLIMATE_PRESETS[0],
-// DEFAULT_THERMOSTAT) -- sized from the room's own UA and worst-case delta-T rather than a
-// flat guess. A flat 1500W default massively overshot the day target with bang-bang control
-// (see solver/tests/test_materials.py::test_suggested_heater_power_for_default_demo_room_is_realistic
-// for the regression pin on this number staying in a sane range).
+// Sized from the room's own heat-loss coefficient and the climate's design
+// temperature -- see solver.materials.suggested_heater_power_w. A flat 1500W default
+// massively overshot the target before the controller could react.
 export const DEFAULT_HEAT_SOURCE: HeatSource = {
   xM: 0.4,
   yM: 1.5,
-  maxPowerW: 473,
+  maxPowerW: 530,
 };
-
-export function defaultSimulationRequest(): SimulationRequest {
-  return {
-    room: DEFAULT_ROOM,
-    heatSource: DEFAULT_HEAT_SOURCE,
-    climate: CLIMATE_PRESETS[0],
-    thermostat: DEFAULT_THERMOSTAT,
-  };
-}
