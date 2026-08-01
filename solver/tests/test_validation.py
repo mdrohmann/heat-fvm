@@ -10,7 +10,7 @@ import pytest
 from solver.climate import climate_locations, get_climate
 from solver.geometry import HeatSource, Room, WallElement, WallElementType
 from solver.materials import DEFAULT_THERMOSTAT, suggested_heater_power_w
-from solver.validation import load_baked_validation, validate_across_days
+from solver.validation import compare_models_across_days, load_baked_validation, validate_across_days
 
 
 def _reference_room() -> Room:
@@ -94,14 +94,52 @@ def test_relative_error_is_zero_when_no_heating_is_required():
     assert point.relative_error == 0.0
 
 
+def test_adaptive_model_beats_baseline_against_the_full_solver():
+    room, heat_source, climate = _berlin_case()
+    linearization_day = climate.linearization_day_of_year(DEFAULT_THERMOSTAT.day_target_c)
+
+    baseline_report, adaptive_report = compare_models_across_days(
+        room, heat_source, climate, DEFAULT_THERMOSTAT,
+        sample_days=[14, 104, 195],
+        linearization_day_of_year=linearization_day,
+        nx=VALIDATION_NX, ny=VALIDATION_NY, dt_s=VALIDATION_DT_S,
+    )
+
+    assert baseline_report.model_label == "baseline"
+    assert adaptive_report.model_label == "adaptive"
+    # Same FOM values on both sides -- this is a fair, paired comparison.
+    assert [p.full_energy_kwh for p in baseline_report.points] == [
+        p.full_energy_kwh for p in adaptive_report.points
+    ]
+
+    assert abs(adaptive_report.annual_energy_relative_error) < abs(
+        baseline_report.annual_energy_relative_error
+    )
+    assert adaptive_report.max_abs_relative_error < baseline_report.max_abs_relative_error
+
+
 def test_baked_validation_covers_every_climate_and_stays_within_bounds():
     baked = load_baked_validation()["locations"]
     assert set(baked) == set(climate_locations())
 
     for location_id, entry in baked.items():
-        assert entry["points"], f"{location_id}: no validation points recorded"
-        assert abs(entry["total_energy_relative_error"]) < 0.15, (
-            f"{location_id}: baked annual energy error exceeds 15%"
+        for model_label in ("baseline", "adaptive"):
+            model_entry = entry[model_label]
+            assert model_entry["points"], f"{location_id}/{model_label}: no validation points recorded"
+            assert abs(model_entry["total_energy_relative_error"]) < 0.15, (
+                f"{location_id}/{model_label}: baked annual energy error exceeds 15%"
+            )
+
+
+def test_baked_validation_shows_adaptive_beats_baseline_everywhere():
+    # The headline claim of the whole RB investigation, pinned against the
+    # committed data so it can't quietly regress on a re-bake.
+    baked = load_baked_validation()["locations"]
+    for location_id, entry in baked.items():
+        baseline_err = abs(entry["baseline"]["total_energy_relative_error"])
+        adaptive_err = abs(entry["adaptive"]["total_energy_relative_error"])
+        assert adaptive_err <= baseline_err, (
+            f"{location_id}: adaptive ({adaptive_err:.3f}) not better than baseline ({baseline_err:.3f})"
         )
 
 

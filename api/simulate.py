@@ -23,14 +23,15 @@ from solver.climate import (
 from solver.fvm import simulate_representative_day
 from solver.geometry import HeatSource, Room, WallElement, WallElementType
 from solver.materials import ThermostatSettings
-from solver.mor import estimate_annual_energy
+from solver.mor import estimate_annual_energy_adaptive
 from solver.validation import load_baked_validation
 
 # The visualisation solve is fine-grained because its temperature field is what the
-# user actually looks at. The linearisation solve only has to produce a smooth
-# velocity pattern, so it runs on a coarser mesh and costs a fraction as much.
+# user actually looks at. The annual (adaptive-RB) estimate needs no full-solver day
+# at all -- its basis is trained by sampling the circulation strength directly -- so
+# ADAPTIVE_NX/NY only sizes the mesh the reduction is built on, not a solve.
 VIEW_NX, VIEW_NY = 20, 15
-LINEARIZATION_NX, LINEARIZATION_NY = 12, 9
+ADAPTIVE_NX, ADAPTIVE_NY = 12, 9
 
 # 288 steps/day at dt=300s is far more temporal detail than a scrubber needs; sending
 # every third frame keeps 15-minute resolution at a third of the payload.
@@ -106,8 +107,8 @@ def simulate_from_request(
     payload: dict[str, Any],
     view_nx: int = VIEW_NX,
     view_ny: int = VIEW_NY,
-    linearization_nx: int = LINEARIZATION_NX,
-    linearization_ny: int = LINEARIZATION_NY,
+    adaptive_nx: int = ADAPTIVE_NX,
+    adaptive_ny: int = ADAPTIVE_NY,
 ) -> dict[str, Any]:
     """Translate a SimulationRequest JSON payload into solver calls and back into
     a SimulationResult JSON payload (see src/lib/types.ts for both shapes)."""
@@ -130,12 +131,12 @@ def simulate_from_request(
         room, heat_source, climate, thermostat,
         day_of_year=view_day, nx=view_nx, ny=view_ny,
     )
-    linearization_solve = simulate_representative_day(
-        room, heat_source, climate, thermostat,
-        day_of_year=linearization_day, nx=linearization_nx, ny=linearization_ny,
-    )
-    annual = estimate_annual_energy(
-        linearization_solve, room, heat_source, climate, thermostat
+    # No full-solver day needed here: the adaptive model's basis is trained by
+    # sampling the circulation strength directly (see build_adaptive_model), which is
+    # what let this drop the separate coarse linearisation solve the baseline path
+    # used to need.
+    annual = estimate_annual_energy_adaptive(
+        room, heat_source, climate, thermostat, nx=adaptive_nx, ny=adaptive_ny
     )
 
     frames = [

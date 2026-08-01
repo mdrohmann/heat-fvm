@@ -30,9 +30,7 @@ def _sample_payload(**overrides) -> dict:
 
 
 def _fast(payload: dict) -> dict:
-    return simulate_from_request(
-        payload, view_nx=8, view_ny=6, linearization_nx=6, linearization_ny=5
-    )
+    return simulate_from_request(payload, view_nx=8, view_ny=6, adaptive_nx=6, adaptive_ny=5)
 
 
 def test_simulate_from_request_end_to_end():
@@ -56,7 +54,10 @@ def test_simulate_from_request_end_to_end():
     assert annual["monthlyKWh"][0] > annual["monthlyKWh"][6]
 
     assert result["climate"]["id"] == "berlin"
-    assert result["validation"], "expected baked ROM validation for this climate"
+    validation = result["validation"]
+    assert validation, "expected baked ROM validation for this climate"
+    assert validation["baseline"]["points"]
+    assert validation["adaptive"]["points"]
     assert result["climateDataMeta"]["source"]
 
 

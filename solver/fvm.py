@@ -57,6 +57,39 @@ def _streamfunction_velocity(
     return u, v
 
 
+def buoyancy_speed_scale(
+    heat_source_temp_c: float,
+    room_avg_temp_c: float,
+    params: BuoyancyParams,
+) -> float:
+    """The single scalar that sets how fast the circulation runs.
+
+    Deliberately written in terms of two *scalars* rather than a whole temperature
+    field: both are linear functionals of the state, so a reduced model can evaluate
+    this from its reduced coordinates and recover the buoyancy nonlinearity without
+    ever reconstructing the full field (see solver/rb.py).
+    """
+    delta_t = heat_source_temp_c - room_avg_temp_c
+    return min(max(params.strength_per_kelvin * max(delta_t, 0.0), 0.0), params.max_speed_m_s)
+
+
+def buoyancy_speed_scale_from_field(
+    room_mesh: RoomMesh, temperature_c: np.ndarray, params: BuoyancyParams
+) -> float:
+    return buoyancy_speed_scale(
+        float(temperature_c[room_mesh.heat_source_cell]), float(np.mean(temperature_c)), params
+    )
+
+
+def unit_buoyancy_velocity(
+    room_mesh: RoomMesh, width_m: float, height_m: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """The circulation's fixed spatial pattern, at unit strength. The actual velocity
+    is always this pattern times a scalar, which is what makes the FVM operator affine
+    in that scalar (see solver/rb.py)."""
+    return _streamfunction_velocity(room_mesh.mesh.cell_centers_m(), width_m, height_m)
+
+
 def buoyancy_velocity(
     room_mesh: RoomMesh,
     width_m: float,
@@ -66,13 +99,8 @@ def buoyancy_velocity(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Velocity field (u, v) in m/s at each cell center for the current temperature
     field. Nonlinear: the driving delta-T is recomputed from `temperature_c`."""
-    centers = room_mesh.mesh.cell_centers_m()
-    u_unit, v_unit = _streamfunction_velocity(centers, width_m, height_m)
-
-    room_avg = float(np.mean(temperature_c))
-    delta_t = float(temperature_c[room_mesh.heat_source_cell]) - room_avg
-    speed_scale = min(max(params.strength_per_kelvin * max(delta_t, 0.0), 0.0), params.max_speed_m_s)
-
+    u_unit, v_unit = unit_buoyancy_velocity(room_mesh, width_m, height_m)
+    speed_scale = buoyancy_speed_scale_from_field(room_mesh, temperature_c, params)
     return speed_scale * u_unit, speed_scale * v_unit
 
 

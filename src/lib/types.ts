@@ -92,15 +92,23 @@ export interface ValidationPoint {
   relativeError: number;
 }
 
-export interface ValidationSummary {
-  label: string;
-  linearization_day_of_year: number;
-  linearization_mean_temp_c: number;
+export interface ModelValidation {
   total_energy_relative_error: number;
   max_abs_relative_error: number;
   mean_abs_relative_error: number;
   max_abs_error_kwh: number;
   points: ValidationPoint[];
+}
+
+export interface ValidationSummary {
+  label: string;
+  linearization_day_of_year: number;
+  linearization_mean_temp_c: number;
+  /** Frozen single-point modal truncation -- what the app used before the adaptive
+   * greedy-RB model replaced it. Kept so the accuracy gain is visible, not just claimed. */
+  baseline: ModelValidation;
+  /** Greedy reduced-basis model with the buoyancy nonlinearity recomputed every step. */
+  adaptive: ModelValidation;
 }
 
 export interface ClimateDataMeta {

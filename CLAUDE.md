@@ -59,6 +59,36 @@ reference implementation, not a rushed demo.
   the thermostat target, anchoring the model where no heating runs — measured at -54%
   annual error for Phoenix, versus +1.2% with the weighted anchor. See
   `ClimateLocation.linearization_day_of_year`.
+- The buoyancy circulation strength `s` is a **single scalar** the whole velocity field
+  scales by (`fvm.buoyancy_speed_scale`), and because upwind advection scales linearly
+  with a non-negative scalar, the FVM operator is **exactly affine** in it:
+  `A(s) = A0 + s*A1`, verified to ~1e-13 (`test_rb.py`). This is what makes a proper
+  reduced-basis model cheap: the basis is trained by sampling `s` directly (a few small
+  dense solves), needing no full-solver trajectory at all, and online the reduced
+  operator for any `s` is just a scalar combination of two small precomputed matrices —
+  cheap enough to re-evaluate every timestep. See `solver/rb.py`.
+- **Un-damped Picard iteration on `s` does not converge — it cycles.** `s` closes a
+  negative-feedback loop (more circulation mixes away the delta-T driving it), and the
+  loop gain is steep enough that plain fixed-point iteration settles into an exact
+  period-2 limit cycle (traced directly: alternates ~0.048 and ~0.287, forever). Fixed
+  iteration counts then sample different phases of that cycle, which produced a
+  confusing sign-alternating few-percent annual bias across every climate before this
+  was diagnosed by baking and comparing *full* validation runs — small hand-picked spot
+  checks looked fine on their own. Standard under-relaxation (blend new/old estimate,
+  `picard_relaxation=0.5`) fixes it, converging in ~4-5 iterations. If you touch
+  `AdaptiveReducedModel.step`, re-run `scripts/run_rom_validation.py` before trusting
+  the result — a plausible-looking single-day check is not enough here.
+- An "optimization" that breaks early when an eigen-bin looks unchanged is **not**
+  equivalent to running the fixed iteration count: the bin can match while the
+  underlying continuous `s` is still drifting within it, silently falling back to a
+  single start-of-step solve exactly where iteration was needed. Don't add early-exit
+  convergence checks to the Picard loop without re-validating against the full solver.
+- Pick the ROM's linearisation point by **heating-degree-day-weighted** mean outdoor
+  temperature, not the plain annual mean (this still matters for the frozen baseline,
+  kept as a comparison point). In a hot climate the annual mean sits above the
+  thermostat target, anchoring the model where no heating runs — measured at -54%
+  annual error for Phoenix, versus +1.2% with the weighted anchor. See
+  `ClimateLocation.linearization_day_of_year`.
 - There is no `vercel.json` on purpose: as of Vercel CLI 58.4.0, `vercel dev`'s Python
   builder throws (`builder.build()` must not contain \`maxDuration\`/\`memory\`) if
   `functions` config is set for `api/simulate.py`, even though the platform accepts

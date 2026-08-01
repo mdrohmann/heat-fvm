@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RoomEditor } from "@/components/editor/RoomEditor";
 import { HeatmapView } from "@/components/heatmap/HeatmapView";
+import { ColorBar } from "@/components/heatmap/ColorBar";
 import { DayCharts } from "@/components/charts/DayCharts";
 import { AnnualCharts } from "@/components/charts/AnnualCharts";
 import { ValidationPanel } from "@/components/charts/ValidationPanel";
@@ -15,6 +16,7 @@ import {
   DEFAULT_THERMOSTAT,
   MONTH_NAMES,
 } from "@/lib/defaults";
+import { targetAnchoredDomain } from "@/lib/colormap";
 import type { HeatSource, Room, SimulationResult, ThermostatSettings } from "@/lib/types";
 
 export default function Home() {
@@ -51,6 +53,12 @@ export default function Home() {
 
   const currentFrame = result?.viewDay.frames[hourIndex];
   const isRunning = status === "running";
+  // Fixed for the whole day's animation, anchored on the day target -- white means
+  // "at target", not "warmest pixel this frame", and the scale no longer jumps
+  // between frames, months, or climates.
+  const heatmapDomain = result
+    ? targetAnchoredDomain(result.viewDay.frames.flatMap((f) => f.temperatureC), thermostat.dayTargetC)
+    : null;
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 font-sans dark:bg-black">
@@ -199,7 +207,7 @@ export default function Home() {
                 accurate the reduced model is.
               </p>
             )}
-            {result && currentFrame && (
+            {result && currentFrame && heatmapDomain && (
               <>
                 <div className="rounded border p-3">
                   <div className="text-xs uppercase tracking-wide text-zinc-500">
@@ -228,7 +236,11 @@ export default function Home() {
                     temperatureC={currentFrame.temperatureC}
                     widthM={room.widthM}
                     heightM={room.heightM}
+                    domain={heatmapDomain}
                   />
+                  <div className="mt-1">
+                    <ColorBar domain={heatmapDomain} targetC={thermostat.dayTargetC} />
+                  </div>
                   <label className="mt-2 flex flex-col gap-1 text-sm">
                     Hour: {currentFrame.hour.toFixed(1)}
                     <input

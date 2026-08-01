@@ -7,6 +7,7 @@ from solver.geometry import HeatSource, Room
 from solver.materials import DEFAULT_THERMOSTAT, suggested_heater_power_w
 from solver.mor import (
     _select_mode_indices,
+    build_adaptive_model,
     build_reduced_model_from_day,
     estimate_annual_energy,
     simulate_reduced_days,
@@ -140,3 +141,78 @@ def test_annual_energy_is_higher_in_a_colder_climate():
         ).total_kwh
 
     assert results["reykjavik"] > results["phoenix"]
+
+
+def test_adaptive_model_needs_no_full_solver_run():
+    # Unlike build_reduced_model_from_day, this only needs the geometry -- no
+    # DayResult, no Picard-iterated nonlinear trajectory to seed it from.
+    room, heat_source, _ = _room_source_climate()
+    model, trained = build_adaptive_model(room, heat_source, nx=8, ny=6)
+
+    assert model.size == trained.size
+    assert model.size > 0
+    assert np.allclose(model.basis.T @ model.basis, np.eye(model.size), atol=1e-8)
+
+
+def test_adaptive_model_project_reconstruct_is_a_good_approximation():
+    room, heat_source, _ = _room_source_climate()
+    model, _ = build_adaptive_model(room, heat_source, nx=8, ny=6)
+
+    n_cells = model.room_mesh.mesh.n_cells
+    field = 18.0 + np.linspace(-1.0, 1.0, n_cells)  # a smooth, plausible temperature field
+    reconstructed = model.reconstruct(model.project(field))
+
+    assert np.abs(reconstructed - field).max() < 2.0  # loose: basis targets dynamics, not arbitrary fields
+
+
+def test_adaptive_model_stays_numerically_sane_over_a_year():
+    room, heat_source, climate = _room_source_climate()
+    model, _ = build_adaptive_model(room, heat_source, nx=8, ny=6)
+
+    year = simulate_reduced_days(
+        model, heat_source, climate, DEFAULT_THERMOSTAT, initial_temp_c=18.0, dt_s=900.0, n_days=DAYS_PER_YEAR
+    )
+
+    assert len(year) == DAYS_PER_YEAR
+    all_temps = np.concatenate([d.room_avg_temp_c for d in year])
+    assert np.all(np.isfinite(all_temps))
+    assert all_temps.min() > -10.0 and all_temps.max() < 60.0  # sanity bound, not a tight physical claim
+
+
+def test_adaptive_model_beats_frozen_baseline_against_the_full_solver():
+    # The key regression: the whole point of the extra RB machinery is that it is
+    # measurably more accurate than the single-point baseline it replaces.
+    room, heat_source, climate = _room_source_climate()
+    dt_s = 300.0
+    sample_days = [14, 195]  # one cold, one mild -- the mild day is where the
+    # frozen baseline was worst
+
+    linearization_day = climate.linearization_day_of_year(DEFAULT_THERMOSTAT.day_target_c)
+    fom_linearization_day = simulate_representative_day(
+        room, heat_source, climate, DEFAULT_THERMOSTAT,
+        day_of_year=linearization_day, nx=10, ny=8, dt_s=dt_s,
+    )
+    baseline = build_reduced_model_from_day(fom_linearization_day, room, n_modes=10)
+    adaptive, _ = build_adaptive_model(room, heat_source, nx=10, ny=8)
+
+    baseline_errors = []
+    adaptive_errors = []
+    for day_of_year in sample_days:
+        fom_day = simulate_representative_day(
+            room, heat_source, climate, DEFAULT_THERMOSTAT,
+            day_of_year=day_of_year, nx=10, ny=8, dt_s=dt_s, initial_temp_c=18.0,
+        )
+        fom_energy_kwh = float(np.sum(fom_day.heater_power_w) * dt_s / 3600.0 / 1000.0)
+
+        base_energy_kwh = simulate_reduced_days(
+            baseline, heat_source, climate, DEFAULT_THERMOSTAT, 18.0, dt_s, 1, start_day_of_year=day_of_year
+        )[0].energy_kwh(dt_s)
+        adapt_energy_kwh = simulate_reduced_days(
+            adaptive, heat_source, climate, DEFAULT_THERMOSTAT, 18.0, dt_s, 1, start_day_of_year=day_of_year
+        )[0].energy_kwh(dt_s)
+
+        baseline_errors.append(abs(base_energy_kwh - fom_energy_kwh) / max(fom_energy_kwh, 1e-9))
+        adaptive_errors.append(abs(adapt_energy_kwh - fom_energy_kwh) / max(fom_energy_kwh, 1e-9))
+
+    assert max(adaptive_errors) < max(baseline_errors)
+    assert np.mean(adaptive_errors) < np.mean(baseline_errors)

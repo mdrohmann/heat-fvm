@@ -1,8 +1,10 @@
-"""Measure the reduced model's accuracy against the full solver and bake the result.
+"""Measure both reductions' accuracy against the full solver and bake the result.
 
 Run offline and commit the output; the web request never pays for this. Full-FVM days
-are the expensive part (~1s each at the validation grid), and a full sweep across four
-climates takes a couple of minutes.
+are the expensive part, and a full sweep across four climates takes a few minutes --
+`compare_models_across_days` runs each day's full solve once and checks both the
+frozen baseline and the adaptive greedy-RB model against it, so the fair before/after
+comparison doesn't cost double.
 
 The numbers this produces characterise the *reference room* under each climate. They
 describe the method's validity envelope, not a live check of whatever geometry a user
@@ -20,7 +22,7 @@ from pathlib import Path
 from solver.climate import climate_locations, get_climate
 from solver.geometry import HeatSource, Room, WallElement, WallElementType
 from solver.materials import DEFAULT_THERMOSTAT, suggested_heater_power_w
-from solver.validation import validate_across_days
+from solver.validation import ValidationReport, compare_models_across_days
 
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "solver" / "data" / "rom_validation.json"
 
@@ -39,6 +41,25 @@ REFERENCE_ROOM = Room(
 )
 
 
+def _serialize(report: ValidationReport) -> dict:
+    return {
+        "total_energy_relative_error": report.annual_energy_relative_error,
+        "max_abs_relative_error": report.max_abs_relative_error,
+        "mean_abs_relative_error": report.mean_abs_relative_error,
+        "max_abs_error_kwh": report.max_abs_error_kwh,
+        "points": [
+            {
+                "dayOfYear": p.day_of_year,
+                "meanOutdoorTempC": round(p.mean_outdoor_temp_c, 2),
+                "fullEnergyKWh": round(p.full_energy_kwh, 4),
+                "reducedEnergyKWh": round(p.reduced_energy_kwh, 4),
+                "relativeError": round(p.relative_error, 4),
+            }
+            for p in report.points
+        ],
+    }
+
+
 def main() -> None:
     results = {}
     for location_id in climate_locations():
@@ -51,7 +72,7 @@ def main() -> None:
         linearization_day = climate.linearization_day_of_year(DEFAULT_THERMOSTAT.day_target_c)
 
         print(f"validating {climate.label} (linearized on day {linearization_day}) ...", flush=True)
-        report = validate_across_days(
+        baseline_report, adaptive_report = compare_models_across_days(
             REFERENCE_ROOM,
             heat_source,
             climate,
@@ -60,38 +81,31 @@ def main() -> None:
             linearization_day_of_year=linearization_day,
         )
         print(
-            f"  total-energy error {report.annual_energy_relative_error * 100:+.1f}% | "
-            f"worst significant day {report.max_abs_relative_error * 100:.1f}% | "
-            f"worst absolute {report.max_abs_error_kwh:.2f} kWh"
+            f"  baseline: total {baseline_report.annual_energy_relative_error * 100:+.1f}% | "
+            f"worst day {baseline_report.max_abs_relative_error * 100:.1f}%"
+        )
+        print(
+            f"  adaptive: total {adaptive_report.annual_energy_relative_error * 100:+.1f}% | "
+            f"worst day {adaptive_report.max_abs_relative_error * 100:.1f}%"
         )
 
         results[location_id] = {
             "label": climate.label,
             "linearization_day_of_year": linearization_day,
             "linearization_mean_temp_c": climate.mean_temp_c[linearization_day],
-            "total_energy_relative_error": report.annual_energy_relative_error,
-            "max_abs_relative_error": report.max_abs_relative_error,
-            "mean_abs_relative_error": report.mean_abs_relative_error,
-            "max_abs_error_kwh": report.max_abs_error_kwh,
-            "points": [
-                {
-                    "dayOfYear": p.day_of_year,
-                    "meanOutdoorTempC": round(p.mean_outdoor_temp_c, 2),
-                    "fullEnergyKWh": round(p.full_energy_kwh, 4),
-                    "reducedEnergyKWh": round(p.reduced_energy_kwh, 4),
-                    "relativeError": round(p.relative_error, 4),
-                }
-                for p in report.points
-            ],
+            "baseline": _serialize(baseline_report),
+            "adaptive": _serialize(adaptive_report),
         }
 
     payload = {
         "_meta": {
             "description": (
-                "Reduced-order model accuracy against the full nonlinear FVM solver, "
+                "Accuracy of both reductions -- the frozen single-point baseline and the "
+                "adaptive greedy-RB model -- against the full nonlinear FVM solver, "
                 "measured on the reference room (4.0 x 3.0 m, one window, one door) for "
-                "each climate. Each sample runs both models over the same day from the "
-                "same initial condition and compares heater energy."
+                "each climate. Each sample runs the full solver once per day and checks "
+                "both reductions against that same run, from the same initial condition, "
+                "with the same controller."
             ),
             "reference_room": {"width_m": REFERENCE_ROOM.width_m, "height_m": REFERENCE_ROOM.height_m},
             "sample_days": SAMPLE_DAYS,

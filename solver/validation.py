@@ -1,15 +1,15 @@
 """Quantify where the reduced model is trustworthy.
 
-The reduction freezes the buoyancy velocity field at the pattern implied by *one*
-linearization day. Days far from that operating point -- a hard cold snap driving
-much stronger convection -- are approximated less well. Building a surrogate is the
-easy half; knowing its validity envelope is the half that decides whether you can
-trust the answer, so this module measures reduced-vs-full error directly rather than
-asserting the reduction is fine.
+Two reductions live in `solver/mor.py`: a frozen single-point baseline, and an
+adaptive greedy-RB model that recomputes the buoyancy nonlinearity every step. The
+adaptive model exists because it measurably beats the baseline -- this module is what
+measures that, rather than asserting it. Building a surrogate is the easy half;
+knowing its validity envelope (and proving the fancier one actually earns its keep)
+is the half that decides whether you can trust the answer.
 
-Each sample runs the full nonlinear FVM and the reduced model over the *same* day,
-from the *same* initial condition, with the same controller, and compares heater
-energy. Full-FVM days are expensive, so this is meant for offline studies
+Each sample runs the full nonlinear FVM once per day and compares both reductions
+against that same run, from the same initial condition, with the same controller.
+Full-FVM days are expensive, so this is meant for offline studies
 (`scripts/run_rom_validation.py`) and regression tests, not per-request work.
 """
 
@@ -26,7 +26,13 @@ from solver.climate import ClimateLocation
 from solver.fvm import DayResult, simulate_representative_day
 from solver.geometry import HeatSource, Room
 from solver.materials import ThermostatSettings
-from solver.mor import ReducedModel, build_reduced_model_from_day, simulate_reduced_days
+from solver.mor import (
+    AdaptiveReducedModel,
+    ReducedModel,
+    build_adaptive_model,
+    build_reduced_model_from_day,
+    simulate_reduced_days,
+)
 
 
 _BAKED_PATH = Path(__file__).resolve().parent / "data" / "rom_validation.json"
@@ -64,6 +70,7 @@ class ValidationPoint:
 
 @dataclass
 class ValidationReport:
+    model_label: str  # "baseline" or "adaptive" -- which reduction these points are for
     linearization_day_of_year: int
     points: list[ValidationPoint]
 
@@ -110,7 +117,7 @@ class ValidationReport:
 
 
 def _reduced_day_energy_kwh(
-    reduced_model: ReducedModel,
+    reduced_model: ReducedModel | AdaptiveReducedModel,
     heat_source: HeatSource,
     climate: ClimateLocation,
     thermostat: ThermostatSettings,
@@ -131,6 +138,39 @@ def _reduced_day_energy_kwh(
     return day.energy_kwh(dt_s)
 
 
+def _build_report(
+    model_label: str,
+    linearization_day_of_year: int,
+    model: ReducedModel | AdaptiveReducedModel,
+    heat_source: HeatSource,
+    climate: ClimateLocation,
+    thermostat: ThermostatSettings,
+    fom_days: dict[int, DayResult],
+    initial_temp_c: float,
+    dt_s: float,
+) -> ValidationReport:
+    points: list[ValidationPoint] = []
+    for day_of_year, full_day in fom_days.items():
+        full_energy_kwh = float(np.sum(full_day.heater_power_w) * dt_s / 3600.0 / 1000.0)
+        reduced_energy_kwh = _reduced_day_energy_kwh(
+            model, heat_source, climate, thermostat, day_of_year, initial_temp_c, dt_s
+        )
+        mean_outdoor_temp_c = float(
+            np.mean([climate.outdoor_temp_c(day_of_year * 24.0 + h) for h in full_day.hours])
+        )
+        points.append(
+            ValidationPoint(
+                day_of_year=day_of_year,
+                mean_outdoor_temp_c=mean_outdoor_temp_c,
+                full_energy_kwh=full_energy_kwh,
+                reduced_energy_kwh=reduced_energy_kwh,
+            )
+        )
+    return ValidationReport(
+        model_label=model_label, linearization_day_of_year=linearization_day_of_year, points=points
+    )
+
+
 def validate_across_days(
     room: Room,
     heat_source: HeatSource,
@@ -145,8 +185,8 @@ def validate_across_days(
     n_modes: int = 10,
     linearization_day: DayResult | None = None,
 ) -> ValidationReport:
-    """Compare reduced-vs-full daily heater energy across `sample_days`, with the
-    reduction linearized about `linearization_day_of_year`."""
+    """Compare the frozen single-point baseline against the full solver across
+    `sample_days`, with the reduction linearized about `linearization_day_of_year`."""
     if linearization_day is None:
         linearization_day = simulate_representative_day(
             room, heat_source, climate, thermostat,
@@ -155,28 +195,62 @@ def validate_across_days(
         )
     reduced_model = build_reduced_model_from_day(linearization_day, room, n_modes)
 
-    points: list[ValidationPoint] = []
-    for day_of_year in sample_days:
-        full_day = simulate_representative_day(
+    fom_days = {
+        day_of_year: simulate_representative_day(
             room, heat_source, climate, thermostat,
             day_of_year=day_of_year, nx=nx, ny=ny, dt_s=dt_s, initial_temp_c=initial_temp_c,
         )
-        full_energy_kwh = float(np.sum(full_day.heater_power_w) * dt_s / 3600.0 / 1000.0)
-        reduced_energy_kwh = _reduced_day_energy_kwh(
-            reduced_model, heat_source, climate, thermostat, day_of_year, initial_temp_c, dt_s
-        )
-        mean_outdoor_temp_c = float(
-            np.mean([climate.outdoor_temp_c(day_of_year * 24.0 + h) for h in full_day.hours])
-        )
-        points.append(
-            ValidationPoint(
-                day_of_year=day_of_year,
-                mean_outdoor_temp_c=mean_outdoor_temp_c,
-                full_energy_kwh=full_energy_kwh,
-                reduced_energy_kwh=reduced_energy_kwh,
+        for day_of_year in sample_days
+    }
+    return _build_report(
+        "baseline", linearization_day_of_year, reduced_model,
+        heat_source, climate, thermostat, fom_days, initial_temp_c, dt_s,
+    )
+
+
+def compare_models_across_days(
+    room: Room,
+    heat_source: HeatSource,
+    climate: ClimateLocation,
+    thermostat: ThermostatSettings,
+    sample_days: list[int],
+    linearization_day_of_year: int,
+    nx: int = 12,
+    ny: int = 9,
+    dt_s: float = 900.0,
+    initial_temp_c: float = 18.0,
+    n_modes: int = 10,
+) -> tuple[ValidationReport, ValidationReport]:
+    """Compare both reductions -- frozen baseline and adaptive greedy-RB -- against
+    the full solver on the same days, running the (expensive) full solver only once
+    per day rather than once per model. Returns `(baseline_report, adaptive_report)`.
+    """
+    linearization_day = simulate_representative_day(
+        room, heat_source, climate, thermostat,
+        day_of_year=linearization_day_of_year, nx=nx, ny=ny, dt_s=dt_s,
+        initial_temp_c=initial_temp_c,
+    )
+    baseline = build_reduced_model_from_day(linearization_day, room, n_modes)
+    adaptive, _ = build_adaptive_model(room, heat_source, nx=nx, ny=ny)
+
+    fom_days = {
+        day_of_year: (
+            linearization_day
+            if day_of_year == linearization_day_of_year
+            else simulate_representative_day(
+                room, heat_source, climate, thermostat,
+                day_of_year=day_of_year, nx=nx, ny=ny, dt_s=dt_s, initial_temp_c=initial_temp_c,
             )
         )
+        for day_of_year in sample_days
+    }
 
-    return ValidationReport(
-        linearization_day_of_year=linearization_day_of_year, points=points
+    baseline_report = _build_report(
+        "baseline", linearization_day_of_year, baseline,
+        heat_source, climate, thermostat, fom_days, initial_temp_c, dt_s,
     )
+    adaptive_report = _build_report(
+        "adaptive", linearization_day_of_year, adaptive,
+        heat_source, climate, thermostat, fom_days, initial_temp_c, dt_s,
+    )
+    return baseline_report, adaptive_report
