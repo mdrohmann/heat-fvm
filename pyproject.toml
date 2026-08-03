@@ -12,6 +12,11 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# Only for scripts/rb_findings_walkthrough.py's plots -- the app and tests never
+# import matplotlib, so this is deliberately its own extra rather than folded into dev.
+explore = [
+    "matplotlib>=3.8",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
